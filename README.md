@@ -11,5 +11,5 @@ This application is based on the documentation :
 ## Problems
 
 For instance, this project don't work. The problem is to define the "Node Id".
-The line 
+The line `99` on the ThymioSender.java is not correct. I need to create an offsetId, but i didn't undertand what is the good reference on the thymioNode object.
 
