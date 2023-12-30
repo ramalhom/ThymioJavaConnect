@@ -17,7 +17,8 @@ import mobsya.fb.Node;
 import mobsya.fb.NodeStatus;
 
 /**
- * Thymio service for Thymio Java Connect. This service is used to receive messages from the Thymio.
+ * Thymio service for Thymio Java Connect. This service is used to receive
+ * messages from the Thymio.
  * 
  */
 public class ThymioService extends WebSocketClient {
@@ -33,31 +34,37 @@ public class ThymioService extends WebSocketClient {
     private Thymio thymio;
 
     /**
+     * The name of the desired Thymio.
+     */
+    private String name;
+
+    /**
      * Constructor of the ThymioService class.
      * 
-     * @param thymio
-     *            The Thymio model.
-     * @throws URISyntaxException
-     *             If the URI is not valid.
+     * @param thymio The Thymio model.
+     * @param name   The name of the desired Thymio.
+     * @throws URISyntaxException If the URI is not valid.
      */
-    public ThymioService(Thymio thymio) throws URISyntaxException {
+    public ThymioService(Thymio thymio, String name) throws URISyntaxException {
         super(new URI(URL));
         this.thymio = thymio;
+        this.name = name;
+
     }
 
     /**
      * Constructor of the ThymioService class.
      * 
-     * @param thymio
-     *            The Thymio model.
-     * @param url
-     *            The URL of the Thymio Java Connect server.
+     * @param thymio The Thymio model.
+     * @param name   The name of the desired Thymio.
+     * @param url    The URL of the Thymio Java Connect server.
      * @throws URISyntaxException
-     *             If the URI is not valid.
+     *                            If the URI is not valid.
      */
-    public ThymioService(Thymio thymio, String url) throws URISyntaxException {
+    public ThymioService(Thymio thymio, String name, String url) throws URISyntaxException {
         super(new URI(url));
         this.thymio = thymio;
+        this.name = name;
     }
 
     /**
@@ -83,7 +90,7 @@ public class ThymioService extends WebSocketClient {
      */
     @Override
     public void onMessage(ByteBuffer bytes) {
-        //System.out.println("Received message: " + bytes.toString());
+        // System.out.println("Received message: " + bytes.toString());
         Message msg = Message.getRootAsMessage(bytes);
         System.out.println("> Message type: " + AnyMessage.name(msg.messageType()));
         switch (msg.messageType()) {
@@ -102,22 +109,21 @@ public class ThymioService extends WebSocketClient {
                 System.out.println("Number node : " + nodesChanged.nodesLength());
                 for (int i = 0; i < nodesChanged.nodesLength(); i++) {
                     Node node = nodesChanged.nodes(i);
-                    System.out.println("===============");
-                    System.out.println("Node name: " + node.name());
-                    System.out.println("Node status: " + NodeStatus.name(node.status()));
-                    System.out.println("Node fwVersion: " + node.fwVersion());
-                    System.out.println("Node type: " + node.type());
-                    System.out.println("Node NodeId: " + node.nodeId());
-                    System.out.println("===============");
-                    synchronized (thymio) {
-                        thymio.setThymioNode(node);
-                        thymio.notify();
+                    if (node.name().contains(name)) {
+                        System.out.println("===============");
+                        System.out.println("Node name: " + node.name());
+                        System.out.println("Node status: " + NodeStatus.name(node.status()));
+                        System.out.println("Node fwVersion: " + node.fwVersion());
+                        System.out.println("Node type: " + node.type());
+                        System.out.println("Node NodeId: " + node.nodeId());
+                        System.out.println("===============");
+                        synchronized (thymio) {
+                            thymio.setThymioNode(node);
+                            thymio.notify();
+                        }
+                        break;
                     }
-                    break;
                 }
-                break;
-            case AnyMessage.LockNode:
-                System.out.println("LockNode");
                 break;
             case AnyMessage.CompileAndLoadCodeOnVM:
                 System.out.println("CompileAndLoadCodeOnVM");
@@ -135,10 +141,14 @@ public class ThymioService extends WebSocketClient {
             case AnyMessage.CompilationResultSuccess:
                 System.out.println("CompilationResultSuccess");
                 break;
+            case AnyMessage.CompilationResultFailure:
+                System.out.println("CompilationResultFailure");
+                break;
             default:
                 System.out.println("Unknown message type " + msg.messageType());
                 break;
         }
+
     }
 
     /**
@@ -146,7 +156,7 @@ public class ThymioService extends WebSocketClient {
      */
     @Override
     public void onClose(int code, String reason, boolean remote) {
-        
+
         System.out.println("Closed connection");
         System.out.println("Code: " + code);
         System.out.println("Reason: " + reason);
@@ -161,7 +171,5 @@ public class ThymioService extends WebSocketClient {
         System.out.println("Error");
         ex.printStackTrace();
     }
-
-
 
 }
