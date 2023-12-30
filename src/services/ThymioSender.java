@@ -1,21 +1,27 @@
 package services;
 
 import java.net.URISyntaxException;
+import java.util.Set;
 import java.util.UUID;
 
 import com.google.flatbuffers.ByteVector;
 import com.google.flatbuffers.FlatBufferBuilder;
 
 import mobsya.fb.AnyMessage;
+import mobsya.fb.CompilationOptions;
 import mobsya.fb.CompileAndLoadCodeOnVM;
 import mobsya.fb.ConnectionHandshake;
 import mobsya.fb.LockNode;
 import mobsya.fb.Message;
 import mobsya.fb.Node;
+import mobsya.fb.ProgrammingLanguage;
+import mobsya.fb.SetVMExecutionState;
+import mobsya.fb.VMExecutionStateCommand;
 import models.Thymio;
 
 /**
- * Thymio sender application for Thymio Java Connect. This application is used to send messages to the Thymio on a thread.
+ * Thymio sender application for Thymio Java Connect. This application is used
+ * to send messages to the Thymio on a thread.
  * 
  */
 public class ThymioSender implements Runnable {
@@ -37,6 +43,8 @@ public class ThymioSender implements Runnable {
     @Override
     public void run() {
         try {
+            // while (true) {
+
             Thymio thymio = new Thymio();
             ThymioService client = new ThymioService(thymio);
 
@@ -50,12 +58,10 @@ public class ThymioSender implements Runnable {
             FlatBufferBuilder builderConnectionHandshake = new FlatBufferBuilder();
             FlatBufferBuilder builderLockNode = new FlatBufferBuilder();
             FlatBufferBuilder builderCompileAndLoadCodeOnVM = new FlatBufferBuilder();
+            FlatBufferBuilder builderVMExecutionState = new FlatBufferBuilder();
 
             // Initialize variables
             int offsetPassword = builderConnectionHandshake.createString("");
-            int offsetCodeId = builderCompileAndLoadCodeOnVM.createString("leds.top[0] = 0\n" +
-                    "leds.top[1] = 0\n" +
-                    "leds.top[2] = 0");
 
             // Create a ConnectionHandshake message
             ConnectionHandshake.startConnectionHandshake(builderConnectionHandshake);
@@ -72,33 +78,34 @@ public class ThymioSender implements Runnable {
             builderConnectionHandshake.finish(messageOffset);
             client.send(builderConnectionHandshake.dataBuffer());
 
-
             // Wait for the Thymio to send the NodesChanged message
             synchronized (thymio) {
                 try {
                     thymio.wait();
+                    System.out.println("ThymioSender: NodesChanged message received");
 
                     Node thymioNode = thymio.getThymioNode();
 
-                    System.out.println("===============");
-                    System.out.println("Node name: " + thymioNode.name());
-                    System.out.println("Node status: " + thymioNode.status());
-                    System.out.println("Node fwVersion: " + thymioNode.fwVersion());
-                    System.out.println("Node type: " + thymioNode.type());
-                    System.out.println("Node NodeId: " + thymioNode.nodeId());
-                    System.out.println("===============");
-                    
+                    // System.out.println("===============");
+                    // System.out.println("Node name: " + thymioNode.name());
+                    // System.out.println("Node status: " + thymioNode.status());
+                    // System.out.println("Node fwVersion: " + thymioNode.fwVersion());
+                    // System.out.println("Node type: " + thymioNode.type());
+                    // System.out.println("Node NodeId: " + thymioNode.nodeId());
+                    // System.out.println("===============");
+
+                    // Thread.sleep(5000);
+
                     ByteVector byteVector = thymio.getThymioNode().nodeId().idVector();
                     byte[] bytes = new byte[byteVector.length()];
                     for (int i = 0; i < byteVector.length(); i++) {
                         bytes[i] = byteVector.get(i);
                     }
-                    System.out.println(bytes.toString());
-                    
-                    // TODO : The problem is here, the nodeId is not the same as the one in the NodesChanged message
-                    int offsetNodeId = builderLockNode.createString(thymioNode.name());
 
-                    long lockUuid = UUID.randomUUID().getMostSignificantBits();
+                    int offsetNodeId = mobsya.fb.NodeId.createNodeId(builderLockNode,
+                            mobsya.fb.NodeId.createIdVector(builderLockNode, bytes));
+
+                    long lockUuid = UUID.randomUUID().getLeastSignificantBits();
 
                     // Create a LockNode message
                     LockNode.startLockNode(builderLockNode);
@@ -114,20 +121,50 @@ public class ThymioSender implements Runnable {
                     builderLockNode.finish(messageLockOffset);
                     client.send(builderLockNode.dataBuffer());
 
+                    // int offsetCodeId =
+                    // builderCompileAndLoadCodeOnVM.createString("motor.left.target =
+                    // 0\r\nmotor.right.target = 0");
+                    int offsetCodeId = builderCompileAndLoadCodeOnVM
+                            .createString("call leds.top(32, 0, 0)motor.left.target =300\r\nmotor.right.target = 300");
+
+                    int offsetNodeCodeVMId = mobsya.fb.NodeId.createNodeId(builderCompileAndLoadCodeOnVM,
+                            mobsya.fb.NodeId.createIdVector(builderCompileAndLoadCodeOnVM, bytes));
+
                     // Create a CompileAndLoadCodeOnVM message
-                    long loadCodeVM = System.currentTimeMillis();
+                    long loadCodeVM = UUID.randomUUID().getLeastSignificantBits();
                     CompileAndLoadCodeOnVM.startCompileAndLoadCodeOnVM(builderCompileAndLoadCodeOnVM);
-                    CompileAndLoadCodeOnVM.addNodeId(builderCompileAndLoadCodeOnVM, offsetNodeId);
                     CompileAndLoadCodeOnVM.addRequestId(builderCompileAndLoadCodeOnVM, loadCodeVM);
+                    CompileAndLoadCodeOnVM.addNodeId(builderCompileAndLoadCodeOnVM, offsetNodeCodeVMId);
                     CompileAndLoadCodeOnVM.addProgram(builderCompileAndLoadCodeOnVM, offsetCodeId);
-                    int offsetLoadCodeVM = CompileAndLoadCodeOnVM.endCompileAndLoadCodeOnVM(builderCompileAndLoadCodeOnVM);
+                    CompileAndLoadCodeOnVM.addLanguage(builderCompileAndLoadCodeOnVM, ProgrammingLanguage.Aseba);
+                    CompileAndLoadCodeOnVM.addOptions(builderCompileAndLoadCodeOnVM, CompilationOptions.LoadOnTarget);
+                    int offsetLoadCodeVM = CompileAndLoadCodeOnVM
+                            .endCompileAndLoadCodeOnVM(builderCompileAndLoadCodeOnVM);
 
                     Message.startMessage(builderCompileAndLoadCodeOnVM);
                     Message.addMessageType(builderCompileAndLoadCodeOnVM, AnyMessage.CompileAndLoadCodeOnVM);
                     Message.addMessage(builderCompileAndLoadCodeOnVM, offsetLoadCodeVM);
-                    messageOffset = Message.endMessage(builderCompileAndLoadCodeOnVM);
-                    builderCompileAndLoadCodeOnVM.finish(messageOffset);
+                    int messageOffsetCode = Message.endMessage(builderCompileAndLoadCodeOnVM);
+                    builderCompileAndLoadCodeOnVM.finish(messageOffsetCode);
                     client.send(builderCompileAndLoadCodeOnVM.dataBuffer());
+
+                    int offsetNodeExecuteId = mobsya.fb.NodeId.createNodeId(builderVMExecutionState,
+                            mobsya.fb.NodeId.createIdVector(builderVMExecutionState, bytes));
+
+                    // Create a ExecutionRequest message
+                    long executionRequest = UUID.randomUUID().getLeastSignificantBits();
+                    SetVMExecutionState.startSetVMExecutionState(builderVMExecutionState);
+                    SetVMExecutionState.addRequestId(builderVMExecutionState, executionRequest);
+                    SetVMExecutionState.addNodeId(builderVMExecutionState, offsetNodeExecuteId);
+                    SetVMExecutionState.addCommand(builderVMExecutionState, VMExecutionStateCommand.Run);
+                    int offsetExecutionRequest = SetVMExecutionState.endSetVMExecutionState(builderVMExecutionState);
+
+                    Message.startMessage(builderVMExecutionState);
+                    Message.addMessageType(builderVMExecutionState, AnyMessage.SetVMExecutionState);
+                    Message.addMessage(builderVMExecutionState, offsetExecutionRequest);
+                    int messageOffsetExecutionRequest = Message.endMessage(builderVMExecutionState);
+                    builderVMExecutionState.finish(messageOffsetExecutionRequest);
+                    client.send(builderVMExecutionState.dataBuffer());
 
                 } catch (InterruptedException e) {
                     System.out.println(e.toString());
@@ -136,7 +173,9 @@ public class ThymioSender implements Runnable {
                     System.out.println(e.toString());
                     e.printStackTrace();
                 }
+                Thread.sleep(1000);
             }
+            // }
         } catch (URISyntaxException e) {
             System.out.println(e.toString());
             e.printStackTrace();

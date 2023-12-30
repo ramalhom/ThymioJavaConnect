@@ -11,8 +11,10 @@ import mobsya.fb.AnyMessage;
 import mobsya.fb.ErrorType;
 import mobsya.fb.Message;
 import mobsya.fb.NodesChanged;
+import mobsya.fb.RequestCompleted;
 import models.Thymio;
 import mobsya.fb.Node;
+import mobsya.fb.NodeStatus;
 
 /**
  * Thymio service for Thymio Java Connect. This service is used to receive messages from the Thymio.
@@ -81,23 +83,28 @@ public class ThymioService extends WebSocketClient {
      */
     @Override
     public void onMessage(ByteBuffer bytes) {
-        System.out.println("Received message: " + bytes.toString());
+        //System.out.println("Received message: " + bytes.toString());
         Message msg = Message.getRootAsMessage(bytes);
-        System.out.println("Message type: " + msg.messageType());
+        System.out.println("> Message type: " + AnyMessage.name(msg.messageType()));
         switch (msg.messageType()) {
             case AnyMessage.ConnectionHandshake:
                 System.out.println("ConnectionHandshake");
+                break;
+            case AnyMessage.RequestCompleted:
+                System.out.println("RequestCompleted");
+                RequestCompleted requestCompleted = (RequestCompleted) msg.message(new RequestCompleted());
+                System.out.println("Request ID : " + requestCompleted.requestId());
                 break;
             case AnyMessage.NodesChanged:
                 System.out.println("NodesChanged");
                 NodesChanged nodesChanged = (NodesChanged) msg.message(msg.message(new NodesChanged()));
                 ;
-                System.out.println("NodesChanged: " + nodesChanged + "| number node : " + nodesChanged.nodesLength());
+                System.out.println("Number node : " + nodesChanged.nodesLength());
                 for (int i = 0; i < nodesChanged.nodesLength(); i++) {
                     Node node = nodesChanged.nodes(i);
                     System.out.println("===============");
                     System.out.println("Node name: " + node.name());
-                    System.out.println("Node status: " + node.status());
+                    System.out.println("Node status: " + NodeStatus.name(node.status()));
                     System.out.println("Node fwVersion: " + node.fwVersion());
                     System.out.println("Node type: " + node.type());
                     System.out.println("Node NodeId: " + node.nodeId());
@@ -120,10 +127,13 @@ public class ThymioService extends WebSocketClient {
                 break;
             case AnyMessage.Error:
                 mobsya.fb.Error error = (mobsya.fb.Error) msg.message(new mobsya.fb.Error());
-                System.out.println("Error: " + ErrorType.names[error.error()]);
+                System.out.println("!!!!!!! Error: " + ErrorType.names[error.error()]);
                 break;
             case AnyMessage.RequestListOfNodes:
                 System.out.println("RequestListOfNodes");
+                break;
+            case AnyMessage.CompilationResultSuccess:
+                System.out.println("CompilationResultSuccess");
                 break;
             default:
                 System.out.println("Unknown message type " + msg.messageType());
